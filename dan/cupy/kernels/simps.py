@@ -1,8 +1,6 @@
 from __future__ import division, print_function
 
 import cupy
-import cupy as np
-import numpy
 import scipy.integrate
 
 
@@ -15,6 +13,8 @@ def tupleset(t, i, value):
 
 
 def _basic_simps(y, start, stop, x, dx, axis):
+    import cupy
+
     nd = len(y.shape)
     if start is None:
         start = 0
@@ -25,12 +25,12 @@ def _basic_simps(y, start, stop, x, dx, axis):
     slice2 = tupleset(slice_all, axis, slice(start+2, stop+2, step))
 
     if x is None:  # Even spaced Simpson's rule.
-        result = np.sum(dx/3.0 * (y[slice0]+4*y[slice1]+y[slice2]),
+        result = cupy.sum(dx/3.0 * (y[slice0]+4*y[slice1]+y[slice2]),
                         axis=axis)
     else:
         # Account for possibly different spacings.
         #    Simpson's rule changes a bit.
-        h = np.diff(x, axis=axis)
+        h = cupy.diff(x, axis=axis)
         sl0 = tupleset(slice_all, axis, slice(start, stop, step))
         sl1 = tupleset(slice_all, axis, slice(start+1, stop+1, step))
         h0 = h[sl0]
@@ -41,7 +41,7 @@ def _basic_simps(y, start, stop, x, dx, axis):
         tmp = hsum/6.0 * (y[slice0]*(2-1.0/h0divh1) +
                           y[slice1]*hsum*hsum/hprod +
                           y[slice2]*(2-h0divh1))
-        result = np.sum(tmp, axis=axis)
+        result = cupy.sum(tmp, axis=axis)
     return result
 
 
@@ -97,14 +97,16 @@ def simps(y, x=None, dx=1, axis=-1, even='avg'):
     if the function is a polynomial of order 2 or less.
 
     """
-    y = np.asarray(y)
+    import cupy
+
+    y = cupy.asarray(y)
     nd = len(y.shape)
     N = y.shape[axis]
     last_dx = dx
     first_dx = dx
     returnshape = 0
     if x is not None:
-        x = np.asarray(x)
+        x = cupy.asarray(x)
         if len(x.shape) == 1:
             shapex = [1] * nd
             shapex[axis] = x.shape[0]

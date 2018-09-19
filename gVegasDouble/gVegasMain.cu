@@ -1,12 +1,13 @@
 #include <cstdlib>
 #include <iostream>
-
+#include <unistd.h>
 #include <ctime>
 #include <sys/time.h>
 #include <sys/resource.h>
+#include <assert.h>
 
 // includes, project
-#include <cutil_inline.h>
+#include "helper_cuda.h"
 // include initial files
 
 #define __MAIN_LOGIC
@@ -42,26 +43,53 @@ int main(int argc, char** argv)
    //   nBlockSize = nBlockSize0
    //
 
-   int ncall0 = 256;
+   int ncall0 = 0;
    int itmx0 = 10;
    int nacc  = 1;
    int nBlockSize0 = 256;
+   int ndim0 = 6;
+   int c;
 
-   cutGetCmdLineArgumenti(argc, (const char**)argv, "n", &ncall0);
-   cutGetCmdLineArgumenti(argc, (const char**)argv, "i", &itmx0);
-   cutGetCmdLineArgumenti(argc, (const char**)argv, "a", &nacc);
-   cutGetCmdLineArgumenti(argc, (const char**)argv, "b", &nBlockSize0);
+   while ((c = getopt (argc, argv, "n:i:a:b:d:")) != -1)
+       switch (c)
+         {
+         case 'n':
+           ncall0 = atoi(optarg);
+           break;
+         case 'i':
+           itmx0 = atoi(optarg);
+           break;
+         case 'a':
+           nacc = atoi(optarg);
+           break;
+         case 'b':
+           nBlockSize0 = atoi(optarg);
+           break;
+         case 'd':
+           ndim0 = atoi(optarg);
+           break;
+         case '?':
+           if (isprint (optopt))
+             fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+           else
+             fprintf (stderr,
+                      "Unknown option character `\\x%x'.\n",
+                      optopt);
+           return 1;
+         default:
+           abort ();
+         }
 
-   ncall = ncall0*1024;
+   ncall = (1 << ncall0)*1024;
    itmx = itmx0;
-   acc = (double)nacc*0.00001;
+   acc = (double)nacc*0.000001;
    nBlockSize = nBlockSize0;
+   ndim = ndim0;
 
-   cutilSafeCallNoSync(cudaSetDevice(0));
+   assert(ndim <= ndim_max);
 
    mds = 1;
-   ndim = 8;
-   
+
    ng = 0;
    npg = 0;
 
@@ -69,9 +97,12 @@ int main(int argc, char** argv)
       xl[i] = 0.;
       xu[i] = 1.;
    }
-   
+   //If nprn = 1 it prints the whole work, when nprn = 0, just the text in this code
+   //If nprn = -1, we can get the grid update information.
+
    nprn = 1;
 //   nprn = -1;
+//  nprn = 0;
 
    double avgi = 0.;
    double sd = 0.;
@@ -96,6 +127,14 @@ int main(int argc, char** argv)
    std::cout<<"#==========================="<<std::endl;
 
    cudaThreadExit();
+
+   //Print running times!
+   std::cout<<"#==========================="<<std::endl;
+   std::cout<<"# Function call time per iteration: " <<timeVegasCall/(double)it<<std::endl;
+   std::cout<<"# Values moving time per iteration: " <<timeVegasMove/(double)it<<std::endl;
+   std::cout<<"# Filling (reduce) time per iteration: " <<timeVegasFill/(double)it<<std::endl;
+   std::cout<<"# Refining time per iteration: " <<timeVegasRefine/(double)it<<std::endl;
+   std::cout<<"#==========================="<<std::endl;
 
    return 0;
 }

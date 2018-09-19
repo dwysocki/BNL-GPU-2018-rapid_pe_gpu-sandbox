@@ -2,7 +2,8 @@
 #include <iomanip>
 #include <cmath>
 
-#include <cutil_inline.h>
+//#include <cutil_inline.h>
+#include "helper_cuda.h"
 
 #include "vegas.h" 
 #include "vegasconst.h"
@@ -44,13 +45,13 @@ void gVegas(double& avgi, double& sd, double& chi2a)
       
    }
    std::cout<<"ng = "<<ng<<std::endl;
-   cutilSafeCall(cudaMemcpyToSymbol(g_ndim, &ndim, sizeof(int)));
-   cutilSafeCall(cudaMemcpyToSymbol(g_ng,   &ng,   sizeof(int)));
-   cutilSafeCall(cudaMemcpyToSymbol(g_nd,   &nd,   sizeof(int)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_ndim, &ndim, sizeof(int)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_ng,   &ng,   sizeof(int)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_nd,   &nd,   sizeof(int)));
    cudaThreadSynchronize(); // wait for synchronize
 
    nCubes = (unsigned)(pow(ng,ndim));
-   cutilSafeCall(cudaMemcpyToSymbol(g_nCubes, &nCubes, sizeof(nCubes)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_nCubes, &nCubes, sizeof(nCubes)));
    cudaThreadSynchronize(); // wait for synchronize
 
    npg = ncall/nCubes;
@@ -84,9 +85,9 @@ void gVegas(double& avgi, double& sd, double& chi2a)
       xjac *= dx[j];
    }
 
-   cutilSafeCall(cudaMemcpyToSymbol(g_npg,  &npg,  sizeof(int)));
-   cutilSafeCall(cudaMemcpyToSymbol(g_xjac, &xjac, sizeof(double)));
-   cutilSafeCall(cudaMemcpyToSymbol(g_dxg,  &dxg,  sizeof(double)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_npg,  &npg,  sizeof(int)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_xjac, &xjac, sizeof(double)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_dxg,  &dxg,  sizeof(double)));
    cudaThreadSynchronize(); // wait for synchronize
 
    ndo = 1;
@@ -129,9 +130,9 @@ void gVegas(double& avgi, double& sd, double& chi2a)
       
    }
 
-   cutilSafeCall(cudaMemcpyToSymbol(g_xl, xl, sizeof(xl)));
-   cutilSafeCall(cudaMemcpyToSymbol(g_dx, dx, sizeof(dx)));
-   cutilSafeCall(cudaMemcpyToSymbol(g_xi, xi, sizeof(xi)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_xl, xl, sizeof(xl)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_dx, dx, sizeof(dx)));
+   checkCudaErrors(cudaMemcpyToSymbol(g_xi, xi, sizeof(xi)));
    cudaThreadSynchronize(); // wait for synchronize
 
    if (nprn!=0) {
@@ -199,12 +200,12 @@ void gVegas(double& avgi, double& sd, double& chi2a)
 
    // CPU
    double* hFval;
-   cutilSafeCall(cudaMallocHost((void**)&hFval, sizeFval));
+   checkCudaErrors(cudaMallocHost((void**)&hFval, sizeFval));
    memset(hFval, '\0', sizeFval);
 
    // GPU
    double* gFval;
-   cutilSafeCall(cudaMalloc((void**)&gFval, sizeFval));
+   checkCudaErrors(cudaMalloc((void**)&gFval, sizeFval));
 
    // allocate IAval
    //   int sizeIAval = nCubeNpg*ndim*sizeof(unsigned short);
@@ -214,7 +215,7 @@ void gVegas(double& avgi, double& sd, double& chi2a)
    // CPU
    //unsigned short* hIAval;
    int* hIAval;
-   cutilSafeCall(cudaMallocHost((void**)&hIAval, sizeIAval));
+   checkCudaErrors(cudaMallocHost((void**)&hIAval, sizeIAval));
    //unsigned short* hIAval =
    //  (unsigned short*)calloc(nCubeNpg*ndim, sizeof(unsigned short));
    memset(hIAval, '\0', sizeIAval);
@@ -222,7 +223,7 @@ void gVegas(double& avgi, double& sd, double& chi2a)
    // GPU
    // unsigned short* gIAval;
    int* gIAval;
-   cutilSafeCall(cudaMalloc((void**)&gIAval, sizeIAval));
+   checkCudaErrors(cudaMalloc((void**)&gIAval, sizeIAval));
 
    double startVegasCall, endVegasCall;
    double startVegasMove, endVegasMove;
@@ -241,10 +242,10 @@ void gVegas(double& avgi, double& sd, double& chi2a)
       timeVegasCall += endVegasCall-startVegasCall;
 
       startVegasMove = getrusage_sec();
-      cutilSafeCall(cudaMemcpy(hFval, gFval,  sizeFval,
+      checkCudaErrors(cudaMemcpy(hFval, gFval,  sizeFval,
                                cudaMemcpyDeviceToHost));
 
-      cutilSafeCall(cudaMemcpy(hIAval, gIAval,  sizeIAval,
+      checkCudaErrors(cudaMemcpy(hIAval, gIAval,  sizeIAval,
                                cudaMemcpyDeviceToHost));
       endVegasMove = getrusage_sec();
       timeVegasMove += endVegasMove-startVegasMove;
@@ -437,7 +438,7 @@ void gVegas(double& avgi, double& sd, double& chi2a)
          xi[j][nd-1] = 1.;
 
       }
-      cutilSafeCall(cudaMemcpyToSymbol(g_xi, xi, sizeof(xi)));
+      checkCudaErrors(cudaMemcpyToSymbol(g_xi, xi, sizeof(xi)));
       cudaThreadSynchronize(); // wait for synchronize
 
       endVegasRefine = getrusage_sec();
@@ -449,12 +450,12 @@ void gVegas(double& avgi, double& sd, double& chi2a)
    } while (it<itmx && acc*fabs(avgi)<sd);
 
 
-   cutilSafeCall(cudaFreeHost(hFval));
-   cutilSafeCall(cudaFree(gFval));
+   checkCudaErrors(cudaFreeHost(hFval));
+   checkCudaErrors(cudaFree(gFval));
 
-   cutilSafeCall(cudaFreeHost(hIAval));
+   checkCudaErrors(cudaFreeHost(hIAval));
 //   free(hIAval);
-   cutilSafeCall(cudaFree(gIAval));
+   checkCudaErrors(cudaFree(gIAval));
 
    //   std::cout<<"ng = "<<ng<<std::endl;
 }

@@ -37,7 +37,7 @@ int main(int argc, char** argv)
    //   program -n="ncall0" -i="itmx0" -a="nacc" -b="nBlockSize0"
    //
    // parameters:
-   //   ncall = 1024*ncall0
+   //   ncall = ncall0
    //   itmx  = itmx0
    //   acc   = nacc*0.00001f
    //   nBlockSize = nBlockSize0
@@ -80,7 +80,8 @@ int main(int argc, char** argv)
            abort ();
          }
 
-   ncall = (1 << ncall0)*1024;
+   //ncall = (1 << ncall0)*1024;
+   ncall = ncall0; // more intuitive to users
    itmx = itmx0;
    acc = (double)nacc*0.000001;
    nBlockSize = nBlockSize0;
@@ -100,7 +101,7 @@ int main(int argc, char** argv)
    //If nprn = 1 it prints the whole work, when nprn = 0, just the text in this code
    //If nprn = -1, we can get the grid update information.
 
-   nprn = 1;
+   nprn = 0;
 //   nprn = -1;
 //  nprn = 0;
 

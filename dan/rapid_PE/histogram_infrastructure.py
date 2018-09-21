@@ -18,8 +18,24 @@ analytic_color="C3"
 analytic_linestyle = "dashed"
 
 
+def histogram(samples, n_bins, xpy=numpy):
+    n_samples = samples.size
+
+    # Compute the histogram counts.
+    indices = xpy.trunc(samples * n_bins).astype(np.int32)
+    histogram_counts = xpy.bincount(
+        indices, minlength=n_bins,
+        weights=xpy.broadcast_to(
+            xpy.asarray([float(n_bins)/n_samples]),
+            (n_samples,),
+        ),
+    )
+    return histogram_counts
+
+
 class MCSampler(object):
     def __init__(self, xpy=numpy):
+        self.xpy = xpy
         self.setup_hist()
 
     def setup_hist(self):
@@ -38,28 +54,18 @@ class MCSampler(object):
         self.histogram_cdf = {}
 
 
-    def compute_hist(self, x_samples, x_min, x_max, n_bins, param):
+    def setup_hist_single_param(self, x_min, x_max, n_bins, param):
         # Compute the range of allowed values.
         x_max_minus_min = x_max - x_min
-        # Rescale the samples to [0, 1]
-        y_samples = (x_samples - x_min) / x_max_minus_min
         # Compute the points at which the histogram will be evaluated, and store
         # the spacing used.
-        histogram_edges, dx = np.linspace(0.0, 1.0, n_bins, retstep=True)
-        # Evaluate the histogram at each of the bins.
-        histogram_values, _ = np.histogram(
-            y_samples, bins=histogram_edges, density=True,
+        histogram_edges, dx = self.xpy.linspace(
+            0.0, 1.0, n_bins+1,
+            retstep=True,
         )
-        # Evaluate the CDF by taking a cumulative sum of the histogram.
-        histogram_cdf = np.empty(
-            histogram_values.size+1, dtype=histogram_values.dtype,
-        )
-        np.cumsum(histogram_values, out=histogram_cdf[1:])
-        histogram_cdf *= dx
-        histogram_cdf[0] = 0.0
 
-        # Renormalize histogram.
-        histogram_values /= x_max_minus_min
+        # Initialize output array for CDF.
+        histogram_cdf = self.xpy.empty(n_bins+1, dtype=numpy.float64)
 
         # Store basic setup parameters
         self.x_min[param] = x_min
@@ -69,8 +75,29 @@ class MCSampler(object):
         self.n_bins[param] = n_bins
 
         self.histogram_edges[param] = histogram_edges
-        self.histogram_values[param] = histogram_values
         self.histogram_cdf[param] = histogram_cdf
+
+
+    def compute_hist(self, x_samples, param):
+        # Rescale the samples to [0, 1]
+        y_samples = (
+            (x_samples - self.x_min[param]) / self.x_max_minus_min[param]
+        )
+        # Evaluate the histogram at each of the bins.
+        histogram_values = histogram(
+            y_samples, self.n_bins[param],
+            xpy=self.xpy,
+        )
+        # Evaluate the CDF by taking a cumulative sum of the histogram.
+        self.xpy.cumsum(histogram_values, out=self.histogram_cdf[param][1:])
+        self.histogram_cdf[param] *= self.dx[param]
+        self.histogram_cdf[param][0] = 0.0
+
+        # Renormalize histogram.
+        histogram_values /= self.x_max_minus_min[param]
+
+        # Store histogram values.
+        self.histogram_values[param] = histogram_values
 
 
     def cdf_inverse_from_hist(self, P, param):
@@ -86,7 +113,7 @@ class MCSampler(object):
         # Rescale `x` to [0, 1].
         y = (x - self.x_min[param]) / self.x_max_minus_min[param]
         # Compute the indices of the histogram bins that `x` falls into.
-        indices = np.trunc(y / self.dx[param], out=y).astype(np.int32)
+        indices = self.xpy.trunc(y / self.dx[param], out=y).astype(np.int32)
         # Return the value of the histogram.
         return self.histogram_values[param][indices]
 
@@ -112,11 +139,16 @@ def test_beta_dist(
     dist = scipy.stats.beta(alpha, beta, loc=loc, scale=scale)
 
     # Generate random samples used for training.
-    samples = dist.rvs(size=n_samples, random_state=random)
+    samples = xpy.asarray(dist.rvs(size=n_samples, random_state=random))
 
     # Set up the MCSampler object.
-    mc_sampler = MCSampler()
-    mc_sampler.compute_hist(samples, x_min, x_max, n_bins, param)
+    mc_sampler = MCSampler(xpy=xpy)
+    mc_sampler.setup_hist_single_param(
+        xpy.asarray(x_min), xpy.asarray(x_max),
+        n_bins,
+        param,
+    )
+    mc_sampler.compute_hist(samples, param)
 
 
     fig, (ax_pdf, ax_icdf) = plt.subplots(2, sharex=True)
@@ -124,11 +156,16 @@ def test_beta_dist(
     x_plotting = numpy.linspace(x_min, x_max, n_plotting_points+1)[:-1]
     P_plotting = numpy.linspace(0.0, 1.0, n_plotting_points+1)[:-1]
 
+    x_plotting_xpy = xpy.asarray(x_plotting)
+    P_plotting_xpy = xpy.asarray(P_plotting)
+
     pdf_analytic = dist.pdf(x_plotting)
-    pdf_histogram = mc_sampler.pdf_from_hist(x_plotting, param)
+    pdf_histogram = mc_sampler.pdf_from_hist(x_plotting_xpy, param)
 
     icdf_analytic = dist.ppf(P_plotting)
-    icdf_histogram = mc_sampler.cdf_inverse_from_hist(P_plotting, param)
+    icdf_histogram = mc_sampler.cdf_inverse_from_hist(P_plotting_xpy, param)
+    # icdf_analytic = numpy.zeros_like(P_plotting)
+    # icdf_histogram = xpy.zeros_like(P_plotting_xpy)
 
     if xpy is cupy:
         pdf_histogram = cupy.asnumpy(pdf_histogram)
@@ -157,4 +194,5 @@ def test_beta_dist(
 
 test_beta_dist(
     "beta_dist_histogram_test.png", 20000, 20,
+    xpy=numpy,
 )

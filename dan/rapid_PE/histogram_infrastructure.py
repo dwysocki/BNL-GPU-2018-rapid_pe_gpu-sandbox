@@ -87,7 +87,6 @@ class MCSampler(object):
         y = (x - self.x_min[param]) / self.x_max_minus_min[param]
         # Compute the indices of the histogram bins that `x` falls into.
         indices = np.trunc(y / self.dx[param], out=y).astype(np.int32)
-        print(indices)
         # Return the value of the histogram.
         return self.histogram_values[param][indices]
 
